@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ecaddy Docs — Getting Started</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="sidebar-logo">ecaddy</a>
+    <span class="sidebar-version">v0.1.0</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group">
+      <div class="nav-group-label">Getting Started</div>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html" class="active">Getting Started</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Reference</div>
+      <a href="commands.html">Commands</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="https://github.com/pniemczyk/easy_caddy" target="_blank">
+      &#9654; GitHub
+    </a>
+  </div>
+</aside>
+
+<div class="topbar">
+  <button class="hamburger" id="sidebarToggle" aria-label="Toggle navigation">&#9776;</button>
+  <a href="index.html" class="topbar-home">ecaddy Docs</a>
+  <span class="topbar-sep">&rsaquo;</span>
+  <span class="topbar-current">Getting Started</span>
+</div>
+
+<div class="layout">
+  <main class="content">
+    <div class="content-card">
+
+      <h1>Getting Started</h1>
+      <p>From zero to <code>https://fishme.localhost</code> in five steps. The first two are once-per-machine; the rest are once-per-project.</p>
+
+      <h2 id="requirements">Requirements</h2>
+      <ul>
+        <li>macOS with <a href="https://brew.sh/">Homebrew</a> installed</li>
+        <li>Ruby 3.2 or newer</li>
+        <li>A foreman-style process manager (<code>foreman</code>, <code>overmind</code>, <code>hivemind</code>, or <code>bin/dev</code> in Rails 7+)</li>
+      </ul>
+
+      <div class="callout callout-note">
+        <strong>Why macOS-only?</strong>
+        <code>ecaddy setup</code> installs Caddy via <code>brew install</code> and runs it under <code>brew services</code>. The rest of the gem (fragment composition, conflict detection, registry) is portable, but the bootstrap helper is mac-specific.
+      </div>
+
+      <h2 id="step-1-install">Step 1 — Install the gem</h2>
+      <pre><code class="language-bash">gem install easy_caddy</code></pre>
+      <p>That installs the <code>ecaddy</code> executable on your <code>$PATH</code>. Verify it:</p>
+      <pre><code class="language-bash">ecaddy version
+# ecaddy 0.1.0</code></pre>
+
+      <h2 id="step-2-setup">Step 2 — Bootstrap Caddy</h2>
+      <pre><code class="language-bash">ecaddy setup</code></pre>
+      <p>This is a one-time machine bootstrap. Every step is idempotent &mdash; running <code>ecaddy setup</code> a second time is a no-op for anything already in place.</p>
+      <ol>
+        <li>Installs Caddy via Homebrew if not already present.</li>
+        <li>Scaffolds <code>~/.config/caddy/{sites,disabled}/</code>.</li>
+        <li>Writes the global <code>Caddyfile</code> (with <code>import sites/*.caddy</code>).</li>
+        <li>Symlinks it into <code>/opt/homebrew/etc/Caddyfile</code> so <code>brew services</code> picks it up.</li>
+        <li>Runs <code>caddy trust</code> to install the local CA in your system keychain &mdash; makes <code>https://*.localhost</code> green in browsers.</li>
+        <li>Starts Caddy as a <code>brew services</code> background service.</li>
+      </ol>
+
+      <h2 id="step-3-caddyfile">Step 3 — Write your project Caddyfile</h2>
+      <p>Put a <code>Caddyfile</code> in your project root. Write it however you need &mdash; <code>ecaddy</code> treats it as read-only source. The only automatic transform on copy: relative <code>output file</code> log paths are rewritten to absolute paths, so Caddy (running as a background service detached from your project directory) can actually write the log files.</p>
+
+      <pre><code class="language-caddy"># Caddyfile (in your Rails project root)
+
+fishme.localhost {
+  handle /vite-dev/* {
+    reverse_proxy localhost:3054
+  }
+
+  reverse_proxy localhost:3104
+  tls internal
+
+  log {
+    level INFO
+    output file log/caddy.log {
+      roll_size 2mb
+      roll_keep 5
+      roll_keep_for 48h
+    }
+  }
+}
+
+vite.fishme.localhost {
+  reverse_proxy localhost:3054
+  tls internal
+}</code></pre>
+
+      <p>Pick unique ports across your projects. A common pattern:</p>
+      <table>
+        <thead>
+          <tr><th>Project</th><th>App port</th><th>Vite port</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>fishme</td><td>3104</td><td>3054</td></tr>
+          <tr><td>letly</td><td>3100</td><td>3050</td></tr>
+          <tr><td>traiderb</td><td>3106</td><td>3056</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-tip">
+        <strong>Pick a site name</strong>
+        Every <code>ecaddy</code> command that touches a project uses a <strong>site name</strong> &mdash; a short identifier you choose, like <code>fishme</code>. It determines the fragment filename (<code>sites/fishme.caddy</code>) and is how <code>up</code>, <code>down</code>, <code>edit</code>, and <code>remove</code> target the project. The name is <em>not</em> read from the Caddyfile &mdash; you supply it explicitly with <code>--site fishme</code> (short: <code>-s fishme</code>).
+      </div>
+
+      <h2 id="step-4-procfile">Step 4 — Add a Procfile line</h2>
+      <pre><code class="language-procfile"># Procfile.dev
+
+web:   bin/rails server -p 3104
+js:    yarn dev
+caddy: ecaddy run --config ./Caddyfile --site fishme</code></pre>
+
+      <p>When <code>foreman</code> (or <code>overmind</code>) starts, <code>ecaddy run</code> copies your <code>Caddyfile</code> into the global config and reloads Caddy. When you press <code>Ctrl-C</code>, it removes the fragment and reloads again &mdash; the domain disappears cleanly. No orphan registrations.</p>
+
+      <h2 id="step-5-rails-hosts">Step 5 — Allow <code>.localhost</code> in Rails</h2>
+      <pre><code class="language-ruby"># config/environments/development.rb
+
+config.hosts &lt;&lt; /.*\.localhost/</code></pre>
+      <p>Without this, Rails will reject the request with <em>"Blocked host: fishme.localhost"</em>.</p>
+
+      <h2 id="step-6-go">Step 6 — Start your project</h2>
+      <pre><code class="language-bash">bin/dev</code></pre>
+      <p>Visit <code>https://fishme.localhost</code> &mdash; done. The browser shows a green padlock because <code>caddy trust</code> seeded the local CA in step 2.</p>
+
+      <h2 id="repeat-per-project">Repeat per project</h2>
+      <p>For every additional project, only steps 3 &ndash; 6 apply. Re-running <code>ecaddy setup</code> is unnecessary.</p>
+
+      <h2 id="without-procfile">Without a Procfile</h2>
+      <p>If you don't want a foreground Caddy process attached to your dev loop, use the one-shot variant:</p>
+      <pre><code class="language-bash">ecaddy ensure --config ./Caddyfile --site fishme</code></pre>
+      <p>This copies the Caddyfile, reloads Caddy, and exits. The registration persists across restarts (Caddy is a system service). Use <code>ecaddy down fishme</code> to disable it later, or <code>ecaddy remove fishme</code> to delete it entirely.</p>
+
+      <h2 id="next-steps">Next steps</h2>
+      <ul>
+        <li><a href="commands.html">Commands reference</a> &mdash; full flags and behaviour for every subcommand</li>
+        <li><a href="troubleshooting.html">Troubleshooting</a> &mdash; <code>doctor</code>, <code>audit</code>, conflict detection, filesystem layout, common issues</li>
+      </ul>
+
+      <footer>
+        ecaddy v0.1.0 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
+      </footer>
+    </div>
+  </main>
+  <aside class="toc-sidebar">
+    <div class="toc-inner">
+      <p class="toc-title">On this page</p>
+      <nav id="toc"></nav>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('pre code').forEach(block => {
+    const lang = block.className.replace('hljs language-', '').replace('language-', '').split(' ')[0];
+    if (lang) {
+      const badge = document.createElement('span');
+      badge.className = 'lang-badge';
+      badge.textContent = lang;
+      block.parentElement.appendChild(badge);
+    }
+  });
+  const toc = document.getElementById('toc');
+  const headings = document.querySelectorAll('.content-card h2, .content-card h3');
+  headings.forEach(h => {
+    if (!h.id) h.id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    a.className = h.tagName === 'H3' ? 'toc-h3' : 'toc-h2';
+    toc.appendChild(a);
+  });
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const id = e.target.id;
+      const link = toc.querySelector(`a[href="#${id}"]`);
+      if (link) link.classList.toggle('active', e.isIntersecting);
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  headings.forEach(h => observer.observe(h));
+  document.querySelectorAll('pre code').forEach(block => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy to clipboard';
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    btn.onclick = () => {
+      navigator.clipboard.writeText(block.textContent);
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'; btn.classList.remove('copied'); }, 2000);
+    };
+    block.parentElement.style.position = 'relative';
+    block.parentElement.appendChild(btn);
+  });
+  document.querySelectorAll('.content-card h2').forEach(h => {
+    const a = document.createElement('a');
+    a.className = 'anchor-icon';
+    a.href = '#' + h.id;
+    a.innerHTML = '#';
+    h.appendChild(a);
+  });
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.addEventListener('click', e => {
+      if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+  }
+</script>
+</body>
+</html>

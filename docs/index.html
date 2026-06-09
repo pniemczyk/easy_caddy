@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ecaddy Docs — Overview</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="sidebar-logo">ecaddy</a>
+    <span class="sidebar-version">v0.1.0</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group">
+      <div class="nav-group-label">Getting Started</div>
+      <a href="index.html" class="active">Overview</a>
+      <a href="getting-started.html">Getting Started</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Reference</div>
+      <a href="commands.html">Commands</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="https://github.com/pniemczyk/easy_caddy" target="_blank">
+      &#9654; GitHub
+    </a>
+  </div>
+</aside>
+
+<!-- Top bar -->
+<div class="topbar">
+  <button class="hamburger" id="sidebarToggle" aria-label="Toggle navigation">&#9776;</button>
+  <a href="index.html" class="topbar-home">ecaddy Docs</a>
+  <span class="topbar-sep">&rsaquo;</span>
+  <span class="topbar-current">Overview</span>
+</div>
+
+<!-- Main wrapper -->
+<div class="layout">
+  <main class="content">
+    <div class="content-card">
+
+      <div class="hero">
+        <h1>ecaddy — One global Caddy for all your local Rails projects</h1>
+        <p>Instead of fighting port conflicts from multiple Caddy processes, <code>ecaddy</code> manages a single shared Caddy instance. Each project keeps its own <code>Caddyfile</code> — <code>ecaddy</code> copies it in and out of the global config on demand.</p>
+        <div class="hero-buttons">
+          <a href="getting-started.html" class="btn btn-primary">Get Started</a>
+          <a href="https://github.com/pniemczyk/easy_caddy" class="btn btn-secondary">View on GitHub</a>
+        </div>
+      </div>
+
+      <h2 id="how-it-works">How It Works</h2>
+      <p>One Caddy process. Many project fragments. Each project ships a <code>Caddyfile</code>; <code>ecaddy</code> copies it into <code>~/.config/caddy/sites/&lt;name&gt;.caddy</code> on start and removes it on stop. The global Caddyfile imports everything in <code>sites/*.caddy</code>, so reloads are atomic and instant.</p>
+
+      <pre><code class="language-text">Browser
+  &#x2502;
+  &#x25BC;
+Caddy  (~/.config/caddy/Caddyfile)
+  &#x2502;         imports sites/*.caddy
+  &#x251C;&#x2500;&#x2500; fishme.localhost   &rarr; localhost:3104
+  &#x251C;&#x2500;&#x2500; letly.localhost    &rarr; localhost:3100
+  &#x2514;&#x2500;&#x2500; traiderb.localhost &rarr; localhost:3106</code></pre>
+
+      <h2 id="features">Features</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="feature-icon">&#x1F310;</span>
+          <h3>One Global Caddy</h3>
+          <p>A single <code>brew services</code>-managed process serves every project. No per-project Caddy, no port collisions on 80/443.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">&#x1F50C;</span>
+          <h3>Procfile-Native</h3>
+          <p>Drop <code>ecaddy run --config ./Caddyfile --site name</code> into <code>Procfile.dev</code>. On Ctrl-C the fragment is removed and Caddy reloads cleanly.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">&#x1F6A8;</span>
+          <h3>Conflict Detection</h3>
+          <p>Before registering a fragment, <code>ecaddy</code> parses it and BLOCKs on shared <code>*.localhost</code> domains or <code>reverse_proxy localhost:PORT</code> collisions.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">&#x1F510;</span>
+          <h3>HTTPS by Default</h3>
+          <p><code>ecaddy setup</code> runs <code>caddy trust</code> once, so <code>https://*.localhost</code> shows up green in browsers with no per-project cert juggling.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">&#x1F501;</span>
+          <h3>Idempotent Setup</h3>
+          <p><code>ecaddy setup</code> is safe to re-run. Every step (Homebrew install, scaffold, trust, brew-services start) checks before acting.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">&#x1FA7A;</span>
+          <h3>Built-in Doctor</h3>
+          <p><code>ecaddy doctor</code> audits every registered site for cross-site port and domain collisions, plus dead upstreams (app not running).</p>
+        </div>
+      </div>
+
+      <h2 id="quick-example">Quick Example</h2>
+      <p>Write a project Caddyfile, point a Procfile line at it, and visit the URL:</p>
+
+      <pre><code class="language-caddy"># Caddyfile (in your Rails project root)
+
+fishme.localhost {
+  reverse_proxy localhost:3104
+  tls internal
+
+  log {
+    output file log/caddy.log
+  }
+}</code></pre>
+
+      <pre><code class="language-procfile"># Procfile.dev
+
+web:   bin/rails server -p 3104
+js:    yarn dev
+caddy: ecaddy run --config ./Caddyfile --site fishme</code></pre>
+
+      <pre><code class="language-bash">bin/dev
+# &rarr; visit https://fishme.localhost</code></pre>
+
+      <h2 id="command-summary">Command Summary</h2>
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ecaddy setup</code></td><td>One-time machine bootstrap (Caddy install, scaffold, trust, start)</td></tr>
+          <tr><td><code>ecaddy run</code></td><td>Register a fragment, block, unregister on shutdown (for Procfile)</td></tr>
+          <tr><td><code>ecaddy ensure</code></td><td>Register a fragment and exit (one-shot, persistent)</td></tr>
+          <tr><td><code>ecaddy list</code></td><td>Show all registered sites</td></tr>
+          <tr><td><code>ecaddy up NAME</code></td><td>Enable a previously disabled site</td></tr>
+          <tr><td><code>ecaddy down NAME</code></td><td>Disable an enabled site without removing it</td></tr>
+          <tr><td><code>ecaddy edit NAME</code></td><td>Edit a site's fragment in <code>$EDITOR</code>, then validate + reload</td></tr>
+          <tr><td><code>ecaddy remove NAME</code></td><td>Delete a site's fragment and registry entry</td></tr>
+          <tr><td><code>ecaddy reload</code></td><td>Validate and reload the global Caddy config</td></tr>
+          <tr><td><code>ecaddy status</code></td><td>Show global Caddy state and per-site health</td></tr>
+          <tr><td><code>ecaddy doctor</code></td><td>Audit all sites for port/domain conflicts and dead upstreams</td></tr>
+          <tr><td><code>ecaddy audit</code></td><td>Full system + TLS audit with optional <code>--fix</code> prompts</td></tr>
+          <tr><td><code>ecaddy logs --site NAME</code></td><td>Tail the project's Caddy log</td></tr>
+        </tbody>
+      </table>
+      <p>See the <a href="commands.html">Commands reference</a> for full flags and behaviour.</p>
+
+      <h2 id="why-not">Why not just run Caddy per project?</h2>
+      <p>Because ports 80 and 443 are global. Two Caddy processes can't both bind them. Multi-project local dev requires either: a per-project SOCKS-style port (ugly URLs), a shared reverse-proxy in front of N Caddies (extra hop), or a single shared Caddy with composed fragments (this approach).</p>
+
+      <div class="callout callout-note">
+        <strong>Scope</strong>
+        ecaddy targets macOS + Homebrew. Linux setups can use the same fragment-composition model but the <code>ecaddy setup</code> bootstrap (which calls <code>brew services</code>) is mac-specific.
+      </div>
+
+      <h2 id="module-map">Module Map</h2>
+      <table>
+        <thead>
+          <tr><th>Module</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>EasyCaddy::CLI</code></td><td>Thor CLI entry point; dispatches each subcommand to a dedicated command object</td></tr>
+          <tr><td><code>EasyCaddy::Paths</code></td><td>Single source of every filesystem path; honours <code>ECADDY_HOME</code></td></tr>
+          <tr><td><code>EasyCaddy::Registry</code></td><td>Reads/writes <code>ecaddy.yml</code> (name &rarr; <code>{ enabled, source_path }</code>)</td></tr>
+          <tr><td><code>EasyCaddy::Site</code></td><td>Immutable value object: <code>name</code>, <code>enabled</code>, <code>source_path</code></td></tr>
+          <tr><td><code>EasyCaddy::Parser</code></td><td>Minimal regex Caddyfile parser — extracts domains, ports, log paths</td></tr>
+          <tr><td><code>EasyCaddy::Conflicts</code></td><td>Domain / port collision detection (<code>check</code> on register, <code>doctor</code> on demand)</td></tr>
+          <tr><td><code>EasyCaddy::Caddy</code></td><td>Wrapper around the <code>caddy</code> binary and <code>brew services</code></td></tr>
+          <tr><td><code>EasyCaddy::Commands::*</code></td><td>One class per CLI command (Setup, Run, Ensure, List, Up, Down, Doctor, &hellip;)</td></tr>
+        </tbody>
+      </table>
+
+      <footer>
+        ecaddy v0.1.0 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a> &middot; <a href="https://rubygems.org/gems/easy_caddy">RubyGems</a>
+      </footer>
+    </div>
+  </main>
+  <aside class="toc-sidebar">
+    <div class="toc-inner">
+      <p class="toc-title">On this page</p>
+      <nav id="toc"></nav>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+
+  // Add language badges
+  document.querySelectorAll('pre code').forEach(block => {
+    const lang = block.className.replace('hljs language-', '').replace('language-', '').split(' ')[0];
+    if (lang) {
+      const badge = document.createElement('span');
+      badge.className = 'lang-badge';
+      badge.textContent = lang;
+      block.parentElement.appendChild(badge);
+    }
+  });
+
+  // Build TOC
+  const toc = document.getElementById('toc');
+  const headings = document.querySelectorAll('.content-card h2, .content-card h3');
+  headings.forEach(h => {
+    if (!h.id) h.id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    a.className = h.tagName === 'H3' ? 'toc-h3' : 'toc-h2';
+    toc.appendChild(a);
+  });
+
+  // Scroll spy
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const id = e.target.id;
+      const link = toc.querySelector(`a[href="#${id}"]`);
+      if (link) link.classList.toggle('active', e.isIntersecting);
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  headings.forEach(h => observer.observe(h));
+
+  // Copy buttons
+  document.querySelectorAll('pre code').forEach(block => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy to clipboard';
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    btn.onclick = () => {
+      navigator.clipboard.writeText(block.textContent);
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'; btn.classList.remove('copied'); }, 2000);
+    };
+    block.parentElement.style.position = 'relative';
+    block.parentElement.appendChild(btn);
+  });
+
+  // Add anchor links to h2
+  document.querySelectorAll('.content-card h2').forEach(h => {
+    const a = document.createElement('a');
+    a.className = 'anchor-icon';
+    a.href = '#' + h.id;
+    a.innerHTML = '#';
+    h.appendChild(a);
+  });
+
+  // Mobile sidebar toggle
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.addEventListener('click', e => {
+      if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+  }
+</script>
+</body>
+</html>

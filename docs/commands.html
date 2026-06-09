@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ecaddy Docs — Commands</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="sidebar-logo">ecaddy</a>
+    <span class="sidebar-version">v0.1.0</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group">
+      <div class="nav-group-label">Getting Started</div>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting Started</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Reference</div>
+      <a href="commands.html" class="active">Commands</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="https://github.com/pniemczyk/easy_caddy" target="_blank">
+      &#9654; GitHub
+    </a>
+  </div>
+</aside>
+
+<div class="topbar">
+  <button class="hamburger" id="sidebarToggle" aria-label="Toggle navigation">&#9776;</button>
+  <a href="index.html" class="topbar-home">ecaddy Docs</a>
+  <span class="topbar-sep">&rsaquo;</span>
+  <span class="topbar-current">Commands</span>
+</div>
+
+<div class="layout">
+  <main class="content">
+    <div class="content-card">
+
+      <h1>Commands</h1>
+      <p>Every <code>ecaddy</code> subcommand and its flags. Commands that touch a project use a <strong>site name</strong> &mdash; a short identifier you supply with <code>--site NAME</code> (or <code>-s NAME</code>). The name determines the fragment filename and is how <code>up</code>, <code>down</code>, <code>edit</code>, and <code>remove</code> target the project.</p>
+
+      <h2 id="setup">ecaddy setup</h2>
+      <p>One-time machine bootstrap. Install Caddy, scaffold the global config, trust the local CA, start the brew service.</p>
+      <pre><code class="language-bash">ecaddy setup</code></pre>
+      <p>Every step is idempotent &mdash; safe to re-run if a prior step failed or you've reinstalled Homebrew. See <a href="getting-started.html#step-2-setup">Getting Started &rsaquo; Step 2</a> for the per-step breakdown.</p>
+
+      <h2 id="run">ecaddy run</h2>
+      <p>Register a project Caddyfile, block, and unregister on shutdown. The Procfile-friendly variant &mdash; pair it with <code>foreman</code>, <code>overmind</code>, or <code>bin/dev</code>.</p>
+      <pre><code class="language-bash">ecaddy run --config ./Caddyfile --site fishme
+ecaddy run -c ./Caddyfile -s fishme</code></pre>
+
+      <h3 id="run-flags">Flags</h3>
+      <table class="api-table">
+        <thead>
+          <tr><th>Flag</th><th>Required</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>--config, -c PATH</td><td>yes</td><td>Path to the project's source Caddyfile</td></tr>
+          <tr><td>--site, -s NAME</td><td>yes</td><td>Site identifier (fragment filename, registry key)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="run-lifecycle">Lifecycle</h3>
+      <ol>
+        <li>Validate that <code>--config</code> exists.</li>
+        <li>Run conflict detection against the registry &mdash; BLOCK on shared domain or port.</li>
+        <li>Rewrite relative <code>output file</code> log paths to absolute paths (resolved from the directory of <code>--config</code>).</li>
+        <li>Write the result to <code>~/.config/caddy/sites/&lt;name&gt;.caddy</code>.</li>
+        <li>Upsert the registry entry.</li>
+        <li>Validate the global config with <code>caddy validate</code> and reload Caddy.</li>
+        <li>Block on a signal trap.</li>
+        <li>On <code>SIGTERM</code> / <code>SIGINT</code>: delete the fragment, reload Caddy, exit 0.</li>
+      </ol>
+
+      <div class="callout callout-tip">
+        <strong>Why log paths are rewritten</strong>
+        Your Caddyfile lives at <code>/projects/fishme/Caddyfile</code>; Caddy runs from <code>brew services</code> and has no relation to that directory. <code>output file log/caddy.log</code> would write somewhere unpredictable. <code>ecaddy</code> rewrites it to <code>/projects/fishme/log/caddy.log</code> before the fragment is installed.
+      </div>
+
+      <h2 id="ensure">ecaddy ensure</h2>
+      <p>One-shot variant of <code>run</code>. Copy the Caddyfile, reload Caddy, exit immediately. The site stays registered across reboots until you run <code>ecaddy down</code> or <code>ecaddy remove</code>.</p>
+      <pre><code class="language-bash">ecaddy ensure --config ./Caddyfile --site fishme</code></pre>
+      <p>Use this in CI, shell scripts, or any setup where you want Caddy configured but don't need a foreground process tied to a dev loop.</p>
+
+      <h2 id="list">ecaddy list</h2>
+      <p>Show all registered sites in a table.</p>
+      <pre><code class="language-bash">ecaddy list
+ecaddy list --format json</code></pre>
+      <pre><code class="language-text">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+&#x2502; Name     &#x2502; Status &#x2502; Domains                                      &#x2502; Ports      &#x2502; Source                   &#x2502;
+&#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x253C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x253C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x253C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x253C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;
+&#x2502; fishme   &#x2502; up     &#x2502; fishme.localhost, vite.fishme.localhost      &#x2502; 3054, 3104 &#x2502; /projects/fishme/Caddyfile &#x2502;
+&#x2502; letly    &#x2502; down   &#x2502; letly.localhost, vite.letly.localhost        &#x2502; 3050, 3100 &#x2502; /projects/letly/Caddyfile  &#x2502;
+&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</code></pre>
+      <p><code>--format json</code> emits a machine-readable list suitable for piping to <code>jq</code>.</p>
+
+      <h2 id="up-down">ecaddy up NAME / ecaddy down NAME</h2>
+      <p>Enable or disable a registered site without removing it. The fragment is moved between <code>sites/</code> and <code>disabled/</code> via <code>Pathname#rename</code> (atomic), the registry's <code>enabled</code> flag is flipped, and Caddy is reloaded.</p>
+      <pre><code class="language-bash">ecaddy down fishme   # sites/fishme.caddy &rarr; disabled/fishme.caddy, reload
+ecaddy up   fishme   # disabled/fishme.caddy &rarr; sites/fishme.caddy, reload</code></pre>
+      <p>Disabled fragments are preserved &mdash; their content stays on disk so re-enabling is instant.</p>
+
+      <h2 id="status">ecaddy status</h2>
+      <p>Show global Caddy state and per-site health (whether the upstream app is actually listening).</p>
+      <pre><code class="language-bash">ecaddy status</code></pre>
+      <pre><code class="language-text">  Caddy service: running
+  Config:        /Users/you/.config/caddy/Caddyfile
+
+  fishme               up
+    fragment: /Users/you/.config/caddy/sites/fishme.caddy
+    source:   /projects/fishme/Caddyfile
+  letly                up (app not running)
+    fragment: /Users/you/.config/caddy/sites/letly.caddy
+    source:   /projects/letly/Caddyfile</code></pre>
+
+      <h2 id="doctor">ecaddy doctor</h2>
+      <p>Scan all registered sites cross-wise for port and domain conflicts, plus TCP-probe each upstream port.</p>
+      <pre><code class="language-bash">ecaddy doctor</code></pre>
+      <p>Exits <code>0</code> if all clear or only <code>INFO</code> findings. Exits <code>1</code> on any <code>BLOCK</code>.</p>
+      <table>
+        <thead>
+          <tr><th>Severity</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge badge-orange">BLOCK</span></td><td>Two sites share a port or domain &mdash; one will fail to bind</td></tr>
+          <tr><td><span class="badge badge-blue">WARN</span></td><td>A port is bound by an unexpected process (not the registered upstream)</td></tr>
+          <tr><td><span class="badge badge-gray">INFO</span></td><td>Upstream not listening (the project's app simply isn't running)</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="audit">ecaddy audit</h2>
+      <p>Full system + TLS audit with optional <code>--fix</code> prompts. Where <code>doctor</code> looks at the registry, <code>audit</code> also probes the live Caddy service, brew-service state, TLS handshakes per domain, and the system-keychain trust state.</p>
+      <pre><code class="language-bash">ecaddy audit                # report-only
+ecaddy audit --fix          # prompt to run each suggested fix
+ecaddy audit --site fishme  # limit to one site</code></pre>
+      <p>The <code>--fix</code> mode walks each collected finding, prints the proposed command, asks for confirmation, runs it, and re-verifies. If the primary fix doesn't resolve the finding, <code>audit</code> chains to a <code>next_fix</code> (e.g. <code>caddy trust</code> &rarr; <code>sudo caddy trust</code>).</p>
+
+      <h2 id="edit">ecaddy edit NAME</h2>
+      <p>Open a site's <em>installed fragment</em> in <code>$EDITOR</code>. Caddy is validated and reloaded after you save and exit the editor.</p>
+      <pre><code class="language-bash">ecaddy edit fishme</code></pre>
+      <div class="callout callout-warning">
+        <strong>This edits the copy, not your source</strong>
+        <code>ecaddy edit</code> opens <code>~/.config/caddy/sites/fishme.caddy</code> &mdash; the installed fragment, not your project's <code>Caddyfile</code>. Re-running <code>ecaddy run</code> (or <code>ecaddy ensure</code>) will overwrite your edits with the project source. Use this for quick experiments; for lasting changes edit the project Caddyfile and re-register.
+      </div>
+
+      <h2 id="logs">ecaddy logs --site NAME</h2>
+      <p>Tail the project's Caddy log files. <code>ecaddy</code> reads the fragment, extracts every <code>output file PATH</code> directive, and shells out to <code>tail</code> on them.</p>
+      <pre><code class="language-bash">ecaddy logs --site fishme           # tail -F (follow)
+ecaddy logs --site fishme --lines 100   # tail -n 100, no follow</code></pre>
+      <p>If the Caddyfile has no <code>output file</code> directives, <code>ecaddy</code> prints guidance and exits. Works for both enabled and disabled sites.</p>
+
+      <h2 id="remove">ecaddy remove NAME</h2>
+      <p>Delete a site's fragment and registry entry entirely.</p>
+      <pre><code class="language-bash">ecaddy remove fishme
+ecaddy remove fishme --force   # skip the confirmation prompt</code></pre>
+
+      <h2 id="reload">ecaddy reload</h2>
+      <p>Validate the global config with <code>caddy validate</code> and reload Caddy without restarting it. Equivalent to what <code>run</code> / <code>ensure</code> / <code>up</code> / <code>down</code> do internally after each change.</p>
+      <pre><code class="language-bash">ecaddy reload</code></pre>
+
+      <h2 id="version">ecaddy version</h2>
+      <pre><code class="language-bash">ecaddy version
+# ecaddy 0.1.0</code></pre>
+
+      <h2 id="thor-reserved-word">A note on the <code>run</code> command</h2>
+      <p><code>run</code> is a Thor reserved method name. Internally the method is <code>caddy_run</code>, exposed as <code>run</code> via <code>map 'run' =&gt; :caddy_run</code> in <code>cli.rb</code>. This is irrelevant from the CLI side &mdash; <code>ecaddy run</code> works as expected &mdash; but worth knowing if you crack open the source.</p>
+
+      <footer>
+        ecaddy v0.1.0 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
+      </footer>
+    </div>
+  </main>
+  <aside class="toc-sidebar">
+    <div class="toc-inner">
+      <p class="toc-title">On this page</p>
+      <nav id="toc"></nav>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('pre code').forEach(block => {
+    const lang = block.className.replace('hljs language-', '').replace('language-', '').split(' ')[0];
+    if (lang) {
+      const badge = document.createElement('span');
+      badge.className = 'lang-badge';
+      badge.textContent = lang;
+      block.parentElement.appendChild(badge);
+    }
+  });
+  const toc = document.getElementById('toc');
+  const headings = document.querySelectorAll('.content-card h2, .content-card h3');
+  headings.forEach(h => {
+    if (!h.id) h.id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    a.className = h.tagName === 'H3' ? 'toc-h3' : 'toc-h2';
+    toc.appendChild(a);
+  });
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const id = e.target.id;
+      const link = toc.querySelector(`a[href="#${id}"]`);
+      if (link) link.classList.toggle('active', e.isIntersecting);
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  headings.forEach(h => observer.observe(h));
+  document.querySelectorAll('pre code').forEach(block => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy to clipboard';
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    btn.onclick = () => {
+      navigator.clipboard.writeText(block.textContent);
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'; btn.classList.remove('copied'); }, 2000);
+    };
+    block.parentElement.style.position = 'relative';
+    block.parentElement.appendChild(btn);
+  });
+  document.querySelectorAll('.content-card h2').forEach(h => {
+    const a = document.createElement('a');
+    a.className = 'anchor-icon';
+    a.href = '#' + h.id;
+    a.innerHTML = '#';
+    h.appendChild(a);
+  });
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.addEventListener('click', e => {
+      if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+  }
+</script>
+</body>
+</html>
