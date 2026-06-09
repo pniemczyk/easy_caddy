@@ -3,4 +3,11 @@
 
 require_relative '../lib/easy_caddy'
 
-EasyCaddy::CLI.start(ARGV)
+begin
+  EasyCaddy::CLI.start(ARGV)
+rescue EasyCaddy::Error => e
+  # Deliberately $stderr.puts, not warn: this message must always surface,
+  # even when warnings are disabled (e.g. RUBYOPT=-W0).
+  $stderr.puts e.message # rubocop:disable Style/StderrPuts
+  exit 1
+end

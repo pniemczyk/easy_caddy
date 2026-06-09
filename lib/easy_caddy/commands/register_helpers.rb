@@ -3,6 +3,7 @@
 require 'fileutils'
 require 'socket'
 require 'openssl'
+require_relative '../error'
 require_relative '../paths'
 require_relative '../registry'
 require_relative '../conflicts'
@@ -12,6 +13,7 @@ require_relative '../parser'
 
 module EasyCaddy
   module Commands
+    # rubocop:disable Metrics/ModuleLength
     module RegisterHelpers
       private
 
@@ -19,10 +21,10 @@ module EasyCaddy
       # Returns the site name on success.
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
       def register(config_path, name)
-        raise ArgumentError, 'Pass --site NAME to identify this project.' unless name
+        raise Error, 'Pass --site NAME to identify this project.' unless name
 
         config_path = File.expand_path(config_path)
-        raise ArgumentError, "Config not found: #{config_path}" unless File.exist?(config_path)
+        raise Error, "Config not found: #{config_path}" unless File.exist?(config_path)
 
         content  = File.read(config_path)
         registry = Registry.load
@@ -33,11 +35,11 @@ module EasyCaddy
         blocks = findings.select { |f| f.severity == 'BLOCK' }
         unless blocks.empty?
           blocks.each { |f| warn "  BLOCK: #{f.message}\n         Hint: #{f.hint}" }
-          raise 'Aborting due to conflict.'
+          raise Error, 'Aborting due to conflict.'
         end
 
         Paths.sites_dir.mkpath
-        rewritten = absolutize_log_paths(content, File.dirname(config_path))
+        rewritten = ensure_log_mode(absolutize_log_paths(content, File.dirname(config_path)))
         Paths.site_file(name).write(rewritten)
 
         ensure_log_dirs(rewritten)
@@ -65,11 +67,65 @@ module EasyCaddy
         end
       end
 
-      def ensure_log_dirs(content)
-        Parser.parse(content).log_paths.each do |path|
-          FileUtils.mkdir_p(File.dirname(path))
+      # Guarantee every `output file` log directive sets a group-writable mode, so a
+      # root-run Caddy's logs (and rolled files) stay openable by the staff-group user that
+      # runs `caddy validate`/`reload`. Leaves an explicit `mode` untouched.
+      def ensure_log_mode(content)
+        content.gsub(/(\boutput\s+file\s+\S+)(\s*\{[^}]*\})?/m) do
+          directive = Regexp.last_match(1)
+          block     = Regexp.last_match(2)
+          next "#{directive} {\n    mode #{Caddy::LOG_FILE_MODE}\n  }" if block.nil?
+          next "#{directive}#{block}" if block.match?(/\bmode\b/)
+
+          "#{directive}#{block.sub('{', "{\n    mode #{Caddy::LOG_FILE_MODE}")}"
         end
       end
+
+      def ensure_log_dirs(content)
+        Parser.parse(content).log_paths.each do |path|
+          ensure_log_writable(path)
+        end
+      end
+
+      # Make sure each log path exists and is writable by the current user.
+      # Caddy validates configs by *opening* every log file, so a stray
+      # root-owned file (left over from an earlier `sudo` run) makes
+      # validation fail with a confusing "permission denied".
+      def ensure_log_writable(path)
+        dir = File.dirname(path)
+        FileUtils.mkdir_p(dir)
+        FileUtils.touch(path) unless File.exist?(path)
+        return if File.writable?(path) && File.writable?(dir)
+
+        raise Error, build_log_permission_error(path)
+      rescue Errno::EACCES, Errno::EPERM
+        raise Error, build_log_permission_error(path)
+      end
+
+      # rubocop:disable Metrics/MethodLength
+      def build_log_permission_error(path)
+        owner =
+          begin
+            require 'etc'
+            Etc.getpwuid(File.stat(path).uid).name if File.exist?(path)
+          rescue StandardError
+            nil
+          end
+        user = ENV['USER'] || Etc.getlogin
+
+        owner_line = owner ? "  Current owner: #{owner}\n" : ''
+        <<~MSG.strip
+          Cannot write to Caddy log file: #{path}
+          #{owner_line}  Caddy runs as root and created this log 0600; `caddy validate` runs as you
+          (#{user}) and can't open it. Make it group-writable once:
+
+            sudo chmod #{Caddy::LOG_FILE_MODE} #{path}
+
+          or run `ecaddy audit --fix` to do it interactively. Re-registering keeps the mode,
+          so it won't recur after log rolls. Then re-run the same `ecaddy` command.
+        MSG
+      end
+      # rubocop:enable Metrics/MethodLength
 
       def probe_tls(domains)
         domains.each do |domain|
@@ -112,5 +168,6 @@ module EasyCaddy
         puts "  [ecaddy] #{name} unregistered."
       end
     end
+    # rubocop:enable Metrics/ModuleLength
   end
 end

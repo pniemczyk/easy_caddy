@@ -272,7 +272,7 @@ ecaddy reload
 
 ```bash
 ecaddy version
-# ecaddy 0.1.0
+# ecaddy 0.1.2
 ```
 
 ## Global config layout

@@ -68,6 +68,41 @@ RSpec.describe EasyCaddy::Commands::Audit do
     end
   end
 
+  describe 'unwritable log file' do
+    let(:log_path) { File.join(@ecaddy_home, 'fishme.log') }
+    let(:frag) do
+      <<~CADDY
+        fishme.localhost {
+          reverse_proxy localhost:3104
+          log { output file #{log_path} }
+        }
+      CADDY
+    end
+
+    before do
+      EasyCaddy::Registry.load.add(
+        EasyCaddy::Site.new(name: 'fishme', enabled: true, source_path: '/src/Caddyfile')
+      )
+      write_enabled_fragment('fishme', frag)
+      File.write(log_path, "x\n")
+      File.chmod(0o400, log_path)
+    end
+
+    after { File.chmod(0o600, log_path) if File.exist?(log_path) }
+
+    it 'flags the log as not writable' do
+      expect { described_class.new(site: 'fishme').call }.to output(/NOT writable/).to_stdout
+    end
+
+    it 'collects a chmod fix that escalates to sudo' do
+      audit = described_class.new(site: 'fishme')
+      audit.call
+      fix = audit.instance_variable_get(:@fixes).find { |f| f.command.start_with?('chmod 0660') }
+      expect(fix).not_to be_nil
+      expect(fix.next_fix.command).to start_with('sudo chmod 0660')
+    end
+  end
+
   describe 'inline hints' do
     before do
       stub_externals(brew_pid: nil, proc_pid: nil)

@@ -399,14 +399,41 @@ module EasyCaddy
         if log_paths.empty?
           info 'No log files configured (add a log { output file … } block)'
         else
-          log_paths.each do |path|
-            if File.exist?(path)
-              ok("log #{path}  (#{humanize_bytes(File.size(path))})")
-            else
-              warn("log #{path}  — not yet created")
-            end
-          end
+          log_paths.each { |path| print_log_file(path) }
         end
+      end
+      # rubocop:enable Metrics/MethodLength
+
+      def print_log_file(path)
+        if !File.exist?(path)
+          warn("log #{path}  — not yet created")
+        elsif File.writable?(path)
+          ok("log #{path}  (#{humanize_bytes(File.size(path))})")
+        else
+          fail("log #{path}  — NOT writable by you (root-owned?)",
+               hint: 'Caddy runs as root and created this 0600 log; `caddy validate` runs as ' \
+                     'you and cannot open it. Make it group-writable.',
+               fix: log_permission_fix(path))
+        end
+      end
+
+      # rubocop:disable Metrics/MethodLength
+      def log_permission_fix(path)
+        {
+          description: "Make the log group-writable (chmod #{Caddy::LOG_FILE_MODE})",
+          command: "chmod #{Caddy::LOG_FILE_MODE} #{path}",
+          verify: -> { File.writable?(path) },
+          escalation: "You don't own this file — needs sudo.",
+          next_fix: Fix.new(
+            label: "#{path} still not writable",
+            description: 'chmod the root-owned log via sudo',
+            command: "sudo chmod #{Caddy::LOG_FILE_MODE} #{path}",
+            verify: -> { File.writable?(path) },
+            escalation: "Still not writable. Check `ls -l #{path}`; " \
+                        "you may need `sudo chown $USER:staff #{path}`.",
+            next_fix: nil
+          )
+        }
       end
       # rubocop:enable Metrics/MethodLength
 

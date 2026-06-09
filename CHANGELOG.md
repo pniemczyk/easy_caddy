@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-06-09
+
+### Added
+
+- `EasyCaddy::Error` exception class for user-facing failures. `exe/ecaddy`
+  now rescues it and prints a clean one-line message to stderr (exit 1),
+  replacing Ruby's default backtrace dump on expected errors.
+- Registered fragments now have `output file` directives rewritten to
+  include `mode 0660` so log files (and rolled successors) stay
+  group-writable — Caddy runs as root to bind `:80`/`:443`, but
+  `caddy validate` / `caddy reload` run as the unprivileged user and need
+  to open them.
+- `ecaddy audit` now reports each declared log file as writable, missing,
+  or root-locked, with an interactive `--fix` that escalates to
+  `sudo chmod` when needed.
+
+### Fixed
+
+- `ecaddy setup` now starts the Caddy brew service **before** running
+  `caddy trust`, fixing a `connection refused` failure on fresh installs
+  (the local-CA fetch requires the admin endpoint at `localhost:2019` to
+  be running). Setup also polls the admin endpoint for up to 10 s before
+  attempting trust.
+- `caddy trust` failures now surface the underlying output plus an
+  actionable hint (brew restart, `sudo caddy trust`, or re-run `setup`)
+  instead of a generic message.
+- `ecaddy run` / `ecaddy ensure` now pre-create each log file declared
+  in the fragment and fail fast with a `sudo chmod` hint when the file
+  or its directory is owned by another user (typically left over from a
+  previous `sudo` run). The opaque `permission denied` from Caddy's
+  config validator is now translated into a one-line, actionable error.
+
 ## [0.1.0] — 2026-06-09
 
 ### Added
@@ -31,4 +63,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SIGTERM`/`SIGINT`, and unregisters on exit — designed to drop into a
   Procfile alongside the Rails server.
 
+[0.1.2]: https://github.com/pniemczyk/easy_caddy/releases/tag/v0.1.2
 [0.1.0]: https://github.com/pniemczyk/easy_caddy/releases/tag/v0.1.0

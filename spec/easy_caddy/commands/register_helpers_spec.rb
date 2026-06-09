@@ -3,7 +3,7 @@
 # Expose private methods via a test double that includes the module.
 class RegisterHelpersHost
   include EasyCaddy::Commands::RegisterHelpers
-  public :absolutize_log_paths, :ensure_log_dirs, :probe_tls, :tls_handshake_ok?
+  public :absolutize_log_paths, :ensure_log_mode, :ensure_log_dirs, :probe_tls, :tls_handshake_ok?
 end
 
 RSpec.describe EasyCaddy::Commands::RegisterHelpers do
@@ -41,6 +41,29 @@ RSpec.describe EasyCaddy::Commands::RegisterHelpers do
     it 'does not alter lines without output file directives' do
       input = "reverse_proxy localhost:3104\ntls internal\n"
       expect(host.absolutize_log_paths(input, base)).to eq(input)
+    end
+  end
+
+  describe '#ensure_log_mode' do
+    it 'wraps a bare output file directive in a block with mode 0660' do
+      result = host.ensure_log_mode('output file /var/log/caddy.log')
+      expect(result).to eq("output file /var/log/caddy.log {\n    mode 0660\n  }")
+    end
+
+    it 'inserts mode 0660 as the first line of an existing block' do
+      input  = "output file /var/log/caddy.log {\n  roll_size 2mb\n}"
+      result = host.ensure_log_mode(input)
+      expect(result).to eq("output file /var/log/caddy.log {\n    mode 0660\n  roll_size 2mb\n}")
+    end
+
+    it 'leaves a block that already sets mode untouched' do
+      input = "output file /var/log/caddy.log {\n  mode 0640\n}"
+      expect(host.ensure_log_mode(input)).to eq(input)
+    end
+
+    it 'does not alter content without an output file directive' do
+      input = "reverse_proxy localhost:3000\ntls internal\n"
+      expect(host.ensure_log_mode(input)).to eq(input)
     end
   end
 
