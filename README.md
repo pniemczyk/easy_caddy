@@ -235,6 +235,24 @@ Exits `0` if all clear or only INFO findings. Exits `1` on any BLOCK.
 
 ---
 
+### `ecaddy audit`
+
+Full system + TLS audit with optional fixes. Where `doctor` checks the registry,
+`audit` also probes the live Caddy service, the brew-service state, a TLS handshake
+per domain, and the system-keychain trust state.
+
+```bash
+ecaddy audit                # report-only
+ecaddy audit --fix          # prompt to run each suggested fix
+ecaddy audit --site fishme  # limit to one site
+```
+
+With `--fix`, `audit` walks each finding, prints the proposed command, asks for
+confirmation, runs it, and re-verifies — chaining to a fallback fix when the first
+doesn't resolve it (e.g. `caddy trust` → `sudo caddy trust`).
+
+---
+
 ### `ecaddy edit NAME`
 
 Open a site's fragment in `$EDITOR`. Caddy is validated and reloaded after you save.
@@ -244,6 +262,22 @@ ecaddy edit fishme
 ```
 
 This edits the copy in `~/.config/caddy/sites/fishme.caddy`, not your project source. Re-run `ecaddy run` (or `ecaddy ensure`) to sync from your project `Caddyfile` again.
+
+---
+
+### `ecaddy logs --site NAME`
+
+Tail a site's Caddy log files. `ecaddy` reads the fragment, extracts every
+`output file PATH` directive, and shells out to `tail` on them.
+
+```bash
+ecaddy logs --site fishme               # tail -F (follow)
+ecaddy logs --site fishme --lines 100   # last 100 lines
+ecaddy logs --site fishme --no-follow   # print and exit
+```
+
+Works for both enabled and disabled sites. If the Caddyfile has no `output file`
+directives, `ecaddy` prints guidance and exits.
 
 ---
 
@@ -268,11 +302,26 @@ ecaddy reload
 
 ---
 
+### `ecaddy retrust`
+
+Re-trust the local Caddy CA certificate. Run this when your browser shows
+`net::ERR_CERT_DATE_INVALID` on a `*.localhost` site — it means the local CA
+has expired in the system keychain.
+
+```bash
+ecaddy retrust
+```
+
+Runs `caddy untrust` (removes the old cert) then `caddy trust` (re-installs it).
+macOS will prompt for your password for each keychain operation.
+
+---
+
 ### `ecaddy version`
 
 ```bash
 ecaddy version
-# ecaddy 0.1.2
+# ecaddy 0.1.3
 ```
 
 ## Global config layout

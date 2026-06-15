@@ -94,12 +94,42 @@ RSpec.describe EasyCaddy::Commands::Audit do
       expect { described_class.new(site: 'fishme').call }.to output(/NOT writable/).to_stdout
     end
 
-    it 'collects a chmod fix that escalates to sudo' do
+    it 'collects a choice fix offering keep / chown / delete' do
       audit = described_class.new(site: 'fishme')
       audit.call
-      fix = audit.instance_variable_get(:@fixes).find { |f| f.command.start_with?('chmod 0660') }
+      fix = audit.instance_variable_get(:@fixes).find(&:choices)
       expect(fix).not_to be_nil
-      expect(fix.next_fix.command).to start_with('sudo chmod 0660')
+      commands = fix.choices.map(&:command)
+      expect(commands).to include(nil) # keep as-is
+      expect(commands).to include(a_string_starting_with('sudo chown'))
+      expect(commands).to include(a_string_starting_with('sudo rm'))
+    end
+
+    it 'recommends re-registering for a durable fix in the hint' do
+      expect { described_class.new(site: 'fishme').call }
+        .to output(/re-register the site/).to_stdout
+    end
+  end
+
+  describe 'date-invalid leaf cert' do
+    before do
+      registry = EasyCaddy::Registry.load
+      registry.add(EasyCaddy::Site.new(name: 'fishme', enabled: true, source_path: '/src/Caddyfile'))
+      write_enabled_fragment('fishme', fragment_content)
+      allow_any_instance_of(described_class).to receive(:cert_date_valid?).and_return(false)
+    end
+
+    it 'reports ERR_CERT_DATE_INVALID' do
+      expect { described_class.new.call }.to output(/ERR_CERT_DATE_INVALID/).to_stdout
+    end
+
+    it 'collects a restart fix that escalates to ecaddy retrust' do
+      audit = described_class.new
+      audit.call
+      fix = audit.instance_variable_get(:@fixes)
+                 .find { |f| f.command == 'brew services restart caddy' }
+      expect(fix).not_to be_nil
+      expect(fix.next_fix.command).to eq('ecaddy retrust')
     end
   end
 
@@ -389,6 +419,45 @@ RSpec.describe EasyCaddy::Commands::Audit do
 
         expect(audit).not_to receive(:system).with('sudo thing')
         audit.send(:run_fixes)
+      end
+    end
+
+    context 'choice-based fix' do
+      let(:prompt) { instance_double(TTY::Prompt) }
+
+      def choice_fix
+        EasyCaddy::Commands::Audit::Fix.new(
+          label: 'root-owned log', description: 'Resolve the log',
+          command: nil, verify: -> { false }, escalation: nil, next_fix: nil,
+          choices: [
+            EasyCaddy::Commands::Audit::Choice.new(label: 'Keep', command: nil, verify: nil),
+            EasyCaddy::Commands::Audit::Choice.new(label: 'Delete', command: 'sudo rm /x',
+                                                   verify: -> { true })
+          ]
+        )
+      end
+
+      before { allow(TTY::Prompt).to receive(:new).and_return(prompt) }
+
+      it 'runs nothing when the user keeps the file' do
+        keep = choice_fix.choices.first
+        allow(prompt).to receive(:select).and_return(keep)
+
+        audit = described_class.new(fix: true)
+        audit.instance_variable_set(:@fixes, [choice_fix])
+        expect(audit).not_to receive(:system)
+        audit.send(:run_fixes)
+      end
+
+      it 'runs the selected command and verifies it' do
+        delete = choice_fix.choices.last
+        allow(prompt).to receive(:select).and_return(delete)
+
+        audit = described_class.new(fix: true)
+        audit.instance_variable_set(:@fixes, [choice_fix])
+        allow(audit).to receive(:system).with('sudo rm /x').and_return(true)
+
+        expect { audit.send(:run_fixes) }.to output(/applied and verified/).to_stdout
       end
     end
   end

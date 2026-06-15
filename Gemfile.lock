@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    easy_caddy (0.1.2)
+    easy_caddy (0.1.3)
       thor (~> 1.3)
       tty-prompt (~> 0.23)
       tty-table (~> 0.12)

@@ -24,7 +24,15 @@ module EasyCaddy
       YELLW = "\e[33m"
       RESET = "\e[0m"
 
-      Fix = Data.define(:label, :description, :command, :verify, :escalation, :next_fix)
+      Fix = Data.define(:label, :description, :command, :verify, :escalation, :next_fix, :choices) do
+        def initialize(label:, description:, command:, verify:, escalation:, next_fix:, choices: nil)
+          super
+        end
+      end
+
+      # A single labelled option offered when a Fix has multiple remedies (e.g. a root-owned log
+      # the user may want to keep, take ownership of, or delete). command: nil means "do nothing".
+      Choice = Data.define(:label, :command, :verify)
 
       def initialize(site: nil, fix: false)
         @site_filter = site
@@ -72,7 +80,8 @@ module EasyCaddy
           command: fix[:command],
           verify: fix[:verify],
           escalation: fix[:escalation],
-          next_fix: fix[:next_fix]
+          next_fix: fix[:next_fix],
+          choices: fix[:choices]
         )
       end
       # rubocop:enable Metrics/MethodLength
@@ -89,7 +98,8 @@ module EasyCaddy
           command: fix[:command],
           verify: fix[:verify],
           escalation: fix[:escalation],
-          next_fix: fix[:next_fix]
+          next_fix: fix[:next_fix],
+          choices: fix[:choices]
         )
       end
       # rubocop:enable Metrics/MethodLength
@@ -344,10 +354,18 @@ module EasyCaddy
         end
 
         domains.each do |domain|
-          handshake_ok, detail = tls_probe(domain)
+          handshake_ok, detail, cert = tls_probe(domain)
           unless handshake_ok
             hint, fix = tls_hint_and_fix(detail, domain)
             fail("#{domain}  — TLS ✗  #{detail}", hint: hint, fix: fix)
+            next
+          end
+
+          unless cert_date_valid?(cert)
+            fail("#{domain}  — TLS ✓ but cert DATE INVALID (browser shows ERR_CERT_DATE_INVALID)  #{detail}",
+                 hint: 'The served leaf certificate is expired or not yet valid. ' \
+                       'Restart Caddy to reissue it, then fully reload the browser.',
+                 fix: cert_date_fix(domain))
             next
           end
 
@@ -360,6 +378,23 @@ module EasyCaddy
                  fix: browser_trust_fix(domain))
           end
         end
+      end
+
+      def cert_date_fix(domain)
+        {
+          description: 'Restart Caddy to reissue the leaf certificate',
+          command: 'brew services restart caddy',
+          verify: -> { cert_date_valid?(tls_probe(domain)[2]) },
+          escalation: 'Restart didn\'t refresh the cert — re-trust the CA and reissue in one step.',
+          next_fix: Fix.new(
+            label: "#{domain} cert still date-invalid — re-trusting CA and reissuing",
+            description: 'Full re-trust + restart',
+            command: 'ecaddy retrust',
+            verify: -> { cert_date_valid?(tls_probe(domain)[2]) },
+            escalation: 'Still invalid. Check your system clock, then try `sudo caddy untrust && sudo caddy trust`.',
+            next_fix: nil
+          )
+        }
       end
 
       def browser_trust_fix(domain)
@@ -411,8 +446,8 @@ module EasyCaddy
           ok("log #{path}  (#{humanize_bytes(File.size(path))})")
         else
           fail("log #{path}  — NOT writable by you (root-owned?)",
-               hint: 'Caddy runs as root and created this 0600 log; `caddy validate` runs as ' \
-                     'you and cannot open it. Make it group-writable.',
+               hint: 'Caddy created this 0600 log as root; `caddy validate` runs as you and can\'t open it. ' \
+                     'Durable fix: re-register the site so its fragment carries `mode 0660`.',
                fix: log_permission_fix(path))
         end
       end
@@ -420,19 +455,20 @@ module EasyCaddy
       # rubocop:disable Metrics/MethodLength
       def log_permission_fix(path)
         {
-          description: "Make the log group-writable (chmod #{Caddy::LOG_FILE_MODE})",
-          command: "chmod #{Caddy::LOG_FILE_MODE} #{path}",
-          verify: -> { File.writable?(path) },
-          escalation: "You don't own this file — needs sudo.",
-          next_fix: Fix.new(
-            label: "#{path} still not writable",
-            description: 'chmod the root-owned log via sudo',
-            command: "sudo chmod #{Caddy::LOG_FILE_MODE} #{path}",
-            verify: -> { File.writable?(path) },
-            escalation: "Still not writable. Check `ls -l #{path}`; " \
-                        "you may need `sudo chown $USER:staff #{path}`.",
-            next_fix: nil
-          )
+          description: 'Resolve the root-owned log file',
+          command: nil,
+          verify: -> { File.writable?(path) || !File.exist?(path) },
+          escalation: "Still not resolved. Check `ls -l #{path}`.",
+          next_fix: nil,
+          choices: [
+            Choice.new(label: 'Keep as-is (skip)', command: nil, verify: nil),
+            Choice.new(label: 'Update owner — take ownership (recommended)',
+                       command: "sudo chown \"$USER:staff\" #{path}",
+                       verify: -> { File.writable?(path) }),
+            Choice.new(label: 'Delete — remove the log (Caddy will recreate it)',
+                       command: "sudo rm #{path}",
+                       verify: -> { !File.exist?(path) })
+          ]
         }
       end
       # rubocop:enable Metrics/MethodLength
@@ -495,14 +531,24 @@ module EasyCaddy
           ssl.hostname   = domain
           ssl.sync_close = true
           ssl.connect
-          cn = ssl.peer_cert&.subject&.to_a&.find { |name, _| name == 'CN' }&.at(1) || '?'
+          cert = ssl.peer_cert
+          cn   = cert&.subject&.to_a&.find { |name, _| name == 'CN' }&.at(1) || '?'
           ssl.close
-          [true, "cert CN=#{cn}"]
+          [true, "cert CN=#{cn}", cert]
         end
       rescue Errno::ECONNREFUSED
-        [false, 'connection refused on :443 (Caddy not running or not bound)']
+        [false, 'connection refused on :443 (Caddy not running or not bound)', nil]
       rescue StandardError => e
-        [false, e.message.split("\n").first]
+        [false, e.message.split("\n").first, nil]
+      end
+
+      # True when the leaf cert is currently within its validity window. A cert outside it is
+      # exactly what the browser reports as ERR_CERT_DATE_INVALID.
+      def cert_date_valid?(cert)
+        return true if cert.nil? # can't tell — don't raise a false alarm
+
+        now = Time.now
+        now >= cert.not_before && now <= cert.not_after
       end
       # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
 
@@ -562,6 +608,8 @@ module EasyCaddy
           return
         end
 
+        return run_choice_fix(fix, prompt) if fix.choices
+
         puts
         puts "  Issue:   #{fix.label}"
         puts "  Fix:     #{fix.description}"
@@ -597,6 +645,33 @@ module EasyCaddy
         end
       end
       # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def run_choice_fix(fix, prompt)
+        puts
+        puts "  Issue:   #{fix.label}"
+        choice = prompt.select("  #{fix.description}:") do |menu|
+          fix.choices.each { |c| menu.choice c.label, c }
+        end
+
+        return if choice.command.nil? # "keep as-is" / skip
+
+        puts "  Command: #{choice.command}"
+        unless system(choice.command)
+          puts "  #{RED}✗#{RESET} command failed to run"
+          return
+        end
+
+        return puts("  #{GREEN}✓#{RESET} applied") if choice.verify.nil?
+
+        sleep 0.5
+        if choice.verify.call
+          puts "  #{GREEN}✓#{RESET} applied and verified"
+        else
+          puts "  #{YELLW}!#{RESET} applied, but the issue is still present"
+        end
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
     end
     # rubocop:enable Metrics/ClassLength
   end

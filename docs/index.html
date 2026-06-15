@@ -13,7 +13,7 @@
 <aside class="sidebar">
   <div class="sidebar-header">
     <a href="index.html" class="sidebar-logo">ecaddy</a>
-    <span class="sidebar-version">v0.1.0</span>
+    <span class="sidebar-version">v0.1.3</span>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-group">
@@ -144,6 +144,7 @@ caddy: ecaddy run --config ./Caddyfile --site fishme</code></pre>
           <tr><td><code>ecaddy doctor</code></td><td>Audit all sites for port/domain conflicts and dead upstreams</td></tr>
           <tr><td><code>ecaddy audit</code></td><td>Full system + TLS audit with optional <code>--fix</code> prompts</td></tr>
           <tr><td><code>ecaddy logs --site NAME</code></td><td>Tail the project's Caddy log</td></tr>
+          <tr><td><code>ecaddy retrust</code></td><td>Re-trust the local Caddy CA certificate (fixes expired-cert errors)</td></tr>
         </tbody>
       </table>
       <p>See the <a href="commands.html">Commands reference</a> for full flags and behaviour.</p>
@@ -174,7 +175,7 @@ caddy: ecaddy run --config ./Caddyfile --site fishme</code></pre>
       </table>
 
       <footer>
-        ecaddy v0.1.0 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a> &middot; <a href="https://rubygems.org/gems/easy_caddy">RubyGems</a>
+        ecaddy v0.1.3 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a> &middot; <a href="https://rubygems.org/gems/easy_caddy">RubyGems</a>
       </footer>
     </div>
   </main>

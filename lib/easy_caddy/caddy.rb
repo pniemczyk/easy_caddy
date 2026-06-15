@@ -78,6 +78,16 @@ module EasyCaddy
       [out, $CHILD_STATUS.success?]
     end
 
+    def self.untrust
+      system("#{BINARY} untrust")
+    end
+
+    # @return [Array(String, Boolean)] combined output and whether the command succeeded
+    def self.untrust_with_output
+      out = `#{BINARY} untrust 2>&1`
+      [out, $CHILD_STATUS.success?]
+    end
+
     ADMIN_ENDPOINT = 'http://localhost:2019/pki/ca/local'
 
     # Polls Caddy's admin API until it responds or the timeout elapses.

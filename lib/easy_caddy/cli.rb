@@ -15,6 +15,7 @@ require_relative 'commands/ensure'
 require_relative 'commands/run'
 require_relative 'commands/logs'
 require_relative 'commands/audit'
+require_relative 'commands/retrust'
 
 module EasyCaddy
   class CLI < Thor
@@ -97,6 +98,11 @@ module EasyCaddy
     option :fix,  type: :boolean, default: false, desc: 'After report, prompt to apply a fix for each failing check'
     def audit
       Commands::Audit.new(site: options[:site], fix: options[:fix]).call
+    end
+
+    desc 'retrust', 'Re-trust local CA and restart Caddy to reissue certs (fixes net::ERR_CERT_DATE_INVALID)'
+    def retrust
+      Commands::Retrust.new.call
     end
 
     desc 'version', 'Print ecaddy version'

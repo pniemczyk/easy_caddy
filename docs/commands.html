@@ -12,7 +12,7 @@
 <aside class="sidebar">
   <div class="sidebar-header">
     <a href="index.html" class="sidebar-logo">ecaddy</a>
-    <span class="sidebar-version">v0.1.0</span>
+    <span class="sidebar-version">v0.1.3</span>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-group">
@@ -166,15 +166,20 @@ ecaddy remove fishme --force   # skip the confirmation prompt</code></pre>
       <p>Validate the global config with <code>caddy validate</code> and reload Caddy without restarting it. Equivalent to what <code>run</code> / <code>ensure</code> / <code>up</code> / <code>down</code> do internally after each change.</p>
       <pre><code class="language-bash">ecaddy reload</code></pre>
 
+      <h2 id="retrust">ecaddy retrust</h2>
+      <p>Re-trust the local Caddy CA certificate. Run this when your browser shows <code>net::ERR_CERT_DATE_INVALID</code> on a <code>*.localhost</code> site &mdash; it means the local CA has expired in the system keychain.</p>
+      <pre><code class="language-bash">ecaddy retrust</code></pre>
+      <p>Runs <code>caddy untrust</code> (removes the old cert) then <code>caddy trust</code> (re-installs it). macOS prompts for your password for each keychain operation.</p>
+
       <h2 id="version">ecaddy version</h2>
       <pre><code class="language-bash">ecaddy version
-# ecaddy 0.1.0</code></pre>
+# ecaddy 0.1.3</code></pre>
 
       <h2 id="thor-reserved-word">A note on the <code>run</code> command</h2>
       <p><code>run</code> is a Thor reserved method name. Internally the method is <code>caddy_run</code>, exposed as <code>run</code> via <code>map 'run' =&gt; :caddy_run</code> in <code>cli.rb</code>. This is irrelevant from the CLI side &mdash; <code>ecaddy run</code> works as expected &mdash; but worth knowing if you crack open the source.</p>
 
       <footer>
-        ecaddy v0.1.0 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
+        ecaddy v0.1.3 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
       </footer>
     </div>
   </main>
