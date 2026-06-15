@@ -12,7 +12,7 @@
 <aside class="sidebar">
   <div class="sidebar-header">
     <a href="index.html" class="sidebar-logo">ecaddy</a>
-    <span class="sidebar-version">v0.1.3</span>
+    <span class="sidebar-version">v0.1.4</span>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-group">
@@ -112,7 +112,9 @@ letly:
         <li>Whether <code>brew services</code> reports Caddy as running</li>
         <li>Whether a Caddy process is alive but unmanaged by brew (a common drift)</li>
         <li>TLS handshake on every <code>*.localhost</code> domain (looks for <code>unknown CA</code>, alert 80, connection refused)</li>
+        <li>Whether the served leaf certificate is within its validity window (catches <code>ERR_CERT_DATE_INVALID</code> from an expired cert)</li>
         <li>Whether the local CA is actually in your system keychain (browser-trust check)</li>
+        <li>Whether each configured log file is writable by you (a root-run Caddy creates them <code>0600</code>)</li>
       </ul>
       <pre><code class="language-bash">ecaddy audit                # report-only
 ecaddy audit --fix          # walk findings, prompt to apply each fix
@@ -131,6 +133,16 @@ ecaddy audit --site fishme  # limit to one site</code></pre>
 # &rarr; if that fails:
 sudo caddy trust</code></pre>
       <p>This is what <code>ecaddy setup</code> runs for you on first install &mdash; if you skipped that step, run it now.</p>
+
+      <h3 id="date-invalid">Browser shows ERR_CERT_DATE_INVALID on <code>https://*.localhost</code></h3>
+      <p>This is a <em>date</em> error, not a trust error. Caddy's <code>*.localhost</code> leaf certificates are short-lived (~12h) and auto-renew, but after the machine sleeps or a renewal hiccups your browser can cache an expired leaf. Re-trust the CA and reissue the certs in one step:</p>
+      <pre><code class="language-bash">ecaddy retrust</code></pre>
+      <p>This runs <code>caddy untrust</code> &rarr; <code>caddy trust</code>, then restarts Caddy so it reissues fresh leaf certs. Afterwards, fully reload your browser (or quit and reopen it) &mdash; a soft refresh often keeps serving the cached, expired certificate. <code>ecaddy audit --fix</code> offers the same restart-then-<code>retrust</code> chain for any domain it finds date-invalid.</p>
+
+      <h3 id="log-not-writable">"log &hellip; NOT writable by you (root-owned?)"</h3>
+      <p>Caddy runs as root (to bind <code>:80</code>/<code>:443</code>) and creates log files <code>0600</code>, so <code>caddy validate</code> &mdash; which runs as you &mdash; can't open them. <code>ecaddy audit --fix</code> offers three choices for the file: <strong>keep as-is</strong>, <strong>take ownership</strong> (<code>sudo chown</code>), or <strong>delete</strong> (Caddy recreates it). The <em>durable</em> fix is to re-register the site so its fragment carries <code>mode 0660</code>:</p>
+      <pre><code class="language-bash">ecaddy ensure -c ./Caddyfile -s fishme</code></pre>
+      <p>Sites registered before <code>mode 0660</code> enforcement keep recreating <code>0600</code> logs after each roll until you re-register them.</p>
 
       <h3 id="rails-blocked-host">Rails returns "Blocked host: fishme.localhost"</h3>
       <p>Rails rejects unfamiliar hostnames by default. Allow the pattern:</p>
@@ -165,7 +177,7 @@ cd /projects/letly  && ecaddy ensure -c ./Caddyfile -s letly</code></pre>
       </ul>
 
       <footer>
-        ecaddy v0.1.3 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
+        ecaddy v0.1.4 &middot; MIT License &middot; <a href="https://github.com/pniemczyk/easy_caddy">GitHub</a>
       </footer>
     </div>
   </main>

@@ -249,7 +249,10 @@ ecaddy audit --site fishme  # limit to one site
 
 With `--fix`, `audit` walks each finding, prints the proposed command, asks for
 confirmation, runs it, and re-verifies — chaining to a fallback fix when the first
-doesn't resolve it (e.g. `caddy trust` → `sudo caddy trust`).
+doesn't resolve it (e.g. `caddy trust` → `sudo caddy trust`). It also flags leaf
+certs outside their validity window as `ERR_CERT_DATE_INVALID` (fix: restart →
+`ecaddy retrust`), and for a root-owned, unwritable log file it offers a choice —
+keep as-is, take ownership (`sudo chown`), or delete.
 
 ---
 
@@ -304,16 +307,19 @@ ecaddy reload
 
 ### `ecaddy retrust`
 
-Re-trust the local Caddy CA certificate. Run this when your browser shows
-`net::ERR_CERT_DATE_INVALID` on a `*.localhost` site — it means the local CA
-has expired in the system keychain.
+Re-trust the local Caddy CA _and_ reissue certificates. Run this when your browser
+shows `net::ERR_CERT_DATE_INVALID` or `NET::ERR_CERT_AUTHORITY_INVALID` on a
+`*.localhost` site — the cached leaf cert has expired, or the local CA is missing
+from the system keychain.
 
 ```bash
 ecaddy retrust
 ```
 
-Runs `caddy untrust` (removes the old cert) then `caddy trust` (re-installs it).
-macOS will prompt for your password for each keychain operation.
+Runs `caddy untrust` (removes the old cert) then `caddy trust` (re-installs it),
+then restarts Caddy so it reissues the short-lived `*.localhost` leaf certs. macOS
+prompts for your password for each keychain operation. Afterwards, fully reload your
+browser (or quit and reopen it) to drop the stale cached certificate.
 
 ---
 
@@ -321,7 +327,7 @@ macOS will prompt for your password for each keychain operation.
 
 ```bash
 ecaddy version
-# ecaddy 0.1.3
+# ecaddy 0.1.4
 ```
 
 ## Global config layout
